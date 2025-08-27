@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,6 +44,19 @@ INSTALLED_APPS = [
     "django_filters",
     "corsheaders",
 ]
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "appointments.auth0backend.Auth0JSONWebTokenAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+}
+
+AUTH0_DOMAIN = "dev-i0gse8er5ywneiwa.us.auth0.com"  # ej: dev-xxxx.us.auth0.com
+API_IDENTIFIER = (
+    "https://sanitasoris/api"  # igual al "Audience" que usas en getAccessTokenSilently
+)
+ALGORITHMS = ["RS256"]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
