@@ -1,6 +1,7 @@
+# appointments/urls.py
 from django.urls import path, include
 from rest_framework import routers
-from .views import PacienteViewSet, DoctorViewSet, ReservaViewSet
+from .views import PacienteViewSet, DoctorViewSet, ReservaViewSet, get_paciente_by_email
 
 router = routers.DefaultRouter()
 router.register(r"pacientes", PacienteViewSet)
@@ -9,4 +10,9 @@ router.register(r"reservas", ReservaViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),
+    path(
+        "pacientes/by_email/<str:email>/",
+        get_paciente_by_email,
+        name="get_paciente_by_email",
+    ),  # 👈 agregado
 ]

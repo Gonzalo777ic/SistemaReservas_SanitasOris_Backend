@@ -5,6 +5,12 @@ from .serializers import PacienteSerializer, DoctorSerializer, ReservaSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from .permissions import EsAdmin, EsDoctor, EsPaciente
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import Paciente
+from .serializers import PacienteSerializer
 
 
 class PacienteViewSet(viewsets.ModelViewSet):
@@ -82,3 +88,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
         if hasattr(user, "doctor_profile"):
             return Reserva.objects.filter(doctor__email=user.email)
         return Reserva.objects.filter(paciente__email=user.email)
+
+
+@api_view(["GET"])
+def get_paciente_by_email(request, email):
+    paciente = get_object_or_404(Paciente, email=email)
+    serializer = PacienteSerializer(paciente)
+    return Response(serializer.data, status=status.HTTP_200_OK)
