@@ -11,7 +11,8 @@ class Auth0User:
 
     def __init__(self, payload):
         self.payload = payload
-        self.username = payload.get("sub")  # El ID de Auth0
+        self.username = payload.get("sub")  # ID único de Auth0
+        self.email = payload.get("email")  # 👈 puede venir en el token
 
     @property
     def is_authenticated(self):

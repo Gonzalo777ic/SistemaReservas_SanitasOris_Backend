@@ -1,7 +1,13 @@
 # appointments/urls.py
 from django.urls import path, include
 from rest_framework import routers
-from .views import PacienteViewSet, DoctorViewSet, ReservaViewSet, get_paciente_by_email
+from .views import (
+    PacienteViewSet,
+    DoctorViewSet,
+    ReservaViewSet,
+    get_paciente_by_email,
+    sync_user,
+)
 
 router = routers.DefaultRouter()
 router.register(r"pacientes", PacienteViewSet)
@@ -14,5 +20,6 @@ urlpatterns = [
         "pacientes/by_email/<str:email>/",
         get_paciente_by_email,
         name="get_paciente_by_email",
-    ),  # 👈 agregado
+    ),
+    path("sync-user/", sync_user, name="sync_user"),
 ]
