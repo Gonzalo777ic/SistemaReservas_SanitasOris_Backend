@@ -3,12 +3,20 @@ from .models import Paciente, Doctor, Reserva
 
 
 class PacienteSerializer(serializers.ModelSerializer):
+    nombre = serializers.CharField(source="user.first_name", read_only=True)
+    apellido = serializers.CharField(source="user.last_name", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+
     class Meta:
         model = Paciente
         fields = ["id", "nombre", "apellido", "email", "telefono", "fecha_registro"]
 
 
 class DoctorSerializer(serializers.ModelSerializer):
+    nombre = serializers.CharField(source="user.first_name", read_only=True)
+    apellido = serializers.CharField(source="user.last_name", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+
     class Meta:
         model = Doctor
         fields = [

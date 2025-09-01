@@ -1,5 +1,4 @@
 # appointments/views.py
-from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 
 from rest_framework import viewsets, filters, status
@@ -9,7 +8,7 @@ from rest_framework.response import Response
 
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Paciente, Doctor, Reserva
+from .models import Paciente, Doctor, Reserva, CustomUser
 from .serializers import PacienteSerializer, DoctorSerializer, ReservaSerializer
 from .permissions import EsAdmin, EsDoctor, EsPaciente
 
@@ -21,13 +20,11 @@ class PacienteViewSet(viewsets.ModelViewSet):
     queryset = Paciente.objects.all()
     serializer_class = PacienteSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ["nombre", "apellido", "email"]
+    # ⚠️ Recuerda: ya no existen campos nombre/apellido/email directos en Paciente
+    # Son parte de user, así que ajusta los search_fields
+    search_fields = ["user__first_name", "user__last_name", "user__email"]
 
     def get_permissions(self):
-        """
-        - Admin puede ver/editar todos los pacientes.
-        - Otros usuarios autenticados solo pueden ver su perfil.
-        """
         user = getattr(self.request, "user", None)
         if user and getattr(user, "is_staff", False):
             return [EsAdmin()]
@@ -37,78 +34,79 @@ class PacienteViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if not user.is_authenticated:
-            return Reserva.objects.none()
+            return Paciente.objects.none()
 
-        # 🟢 Solución: Usar getattr para acceder a is_staff de forma segura
         if getattr(user, "is_staff", False):
-            return Reserva.objects.all()
+            return Paciente.objects.all()
 
-        # ⚠️ Si `hasattr` da problemas con Auth0, es mejor usar `try/except` o
-        # simplemente verificar el rol del usuario de otra manera.
-        # Por ejemplo, puedes verificar si el usuario tiene un perfil de doctor.
-        try:
-            if hasattr(user, "doctor_profile"):
-                return Reserva.objects.filter(doctor__email=user.email)
-        except AttributeError:
-            pass  # Ignora si el atributo no existe
-
-        return Reserva.objects.filter(paciente__email=user.email)
+        return Paciente.objects.filter(user=user)
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])  # 👈 protegido con JWT de Auth0
+@permission_classes([IsAuthenticated])  # protegido con JWT de Auth0
 def sync_user(request):
     """
-    Crea o actualiza un usuario y su paciente asociado a partir de Auth0.
+    Crea o actualiza un CustomUser y su perfil de Paciente asociado a partir de Auth0.
     """
     data = request.data
     email = data.get("email")
     nombre_completo = data.get("name", "")
+    auth0_id = data.get("sub")  # 👈 viene en el token de Auth0 normalmente
+    print("SYNC USER request.data:", data)
 
-    if not email:
-        return Response({"error": "Email es requerido"}, status=400)
+    if not email or not auth0_id:
+        return Response({"error": "Email y Auth0 ID son requeridos"}, status=400)
 
     # separar nombre/apellido básico
     nombre_split = nombre_completo.split(" ", 1)
     nombre = nombre_split[0]
     apellido = nombre_split[1] if len(nombre_split) > 1 else ""
 
-    # 1️⃣ Crear/obtener User
-    user, created = User.objects.get_or_create(
-        username=email,
+    # 1️⃣ Crear/obtener CustomUser
+    user, created = CustomUser.objects.get_or_create(
+        auth0_id=auth0_id,
         defaults={
             "email": email,
             "first_name": nombre,
             "last_name": apellido,
+            "role": "paciente",  # por defecto todos entran como pacientes
             "is_staff": False,
             "is_superuser": False,
         },
     )
 
-    # garantizar que no sea staff por accidente
-    if user.is_staff:
-        user.is_staff = False
-        user.save()
+    # si ya existía pero cambió algo en Auth0 → actualizar
+    if not created:
+        updated = False
+        if user.email != email:
+            user.email = email
+            updated = True
+        if user.first_name != nombre:
+            user.first_name = nombre
+            updated = True
+        if user.last_name != apellido:
+            user.last_name = apellido
+            updated = True
+        if updated:
+            user.save()
 
-    # 2️⃣ Crear/obtener Paciente
-    paciente, pac_created = Paciente.objects.get_or_create(
-        user=user,
-        defaults={"nombre": nombre, "apellido": apellido, "email": email},
-    )
+    # 2️⃣ Crear/obtener Paciente vinculado
+    paciente, pac_created = Paciente.objects.get_or_create(user=user)
 
     return Response(
         {
             "msg": "Usuario sincronizado",
             "user_id": user.id,
             "paciente_id": paciente.id,
-            "created": created or pac_created,
+            "created_user": created,
+            "created_paciente": pac_created,
         }
     )
 
 
 @api_view(["GET"])
 def get_paciente_by_email(request, email):
-    paciente = get_object_or_404(Paciente, email=email)
+    paciente = get_object_or_404(Paciente, user__email=email)
     serializer = PacienteSerializer(paciente)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -120,7 +118,12 @@ class DoctorViewSet(viewsets.ModelViewSet):
     queryset = Doctor.objects.all()
     serializer_class = DoctorSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ["nombre", "apellido", "especialidad", "email"]
+    search_fields = [
+        "user__first_name",
+        "user__last_name",
+        "user__email",
+        "especialidad",
+    ]
 
     def get_permissions(self):
         """
@@ -158,17 +161,32 @@ class ReservaViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        user = self.request.user
+        auth0_user = self.request.user  # esto es Auth0User
 
-        if not user.is_authenticated:
+        if not auth0_user:
             return Reserva.objects.none()
 
-        # 🟢 CORRECCIÓN: Usar getattr para la verificación de staff
+        # 🔹 Convertir a CustomUser
+        try:
+            auth0_id = getattr(auth0_user, "sub", None)  # intenta como atributo
+            if auth0_id is None and hasattr(auth0_user, "_payload"):
+                auth0_id = auth0_user._payload.get("sub")
+
+            if not auth0_id:
+                return Reserva.objects.none()
+
+            try:
+                user = CustomUser.objects.get(auth0_id=auth0_id)
+            except CustomUser.DoesNotExist:
+                return Reserva.objects.none()
+
+        except CustomUser.DoesNotExist:
+            return Reserva.objects.none()
+
         if getattr(user, "is_staff", False):
             return Reserva.objects.all()
 
-        # El resto de la lógica para doctor y paciente
         if hasattr(user, "doctor_profile"):
-            return Reserva.objects.filter(doctor__email=user.email)
+            return Reserva.objects.filter(doctor__user=user)
 
-        return Reserva.objects.filter(paciente__email=user.email)
+        return Reserva.objects.filter(paciente__user=user)

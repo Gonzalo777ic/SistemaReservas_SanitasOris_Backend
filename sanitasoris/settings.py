@@ -83,6 +83,9 @@ CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = "sanitasoris.urls"
 
+AUTH_USER_MODEL = "appointments.CustomUser"
+
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
