@@ -98,10 +98,21 @@ class Reserva(models.Model):
 
     def __str__(self):
         paciente_nombre = (
-            f"{self.paciente.user.first_name} {self.paciente.user.last_name}".strip()
+            getattr(self.paciente.user, "first_name", "")
+            + " "
+            + getattr(self.paciente.user, "last_name", "")
         )
         doctor_nombre = (
-            f"{self.doctor.user.first_name} {self.doctor.user.last_name}".strip()
+            getattr(self.doctor.user, "first_name", "")
+            + " "
+            + getattr(self.doctor.user, "last_name", "")
         )
 
-        return f"{paciente_nombre or self.paciente.user.email} con Dr(a). {doctor_nombre or self.doctor.user.email} el {self.fecha_hora:%Y-%m-%d %H:%M}"
+        paciente_nombre = paciente_nombre.strip() or getattr(
+            self.paciente.user, "email", "Paciente desconocido"
+        )
+        doctor_nombre = doctor_nombre.strip() or getattr(
+            self.doctor.user, "email", "Doctor desconocido"
+        )
+
+        return f"{paciente_nombre} con Dr(a). {doctor_nombre} el {self.fecha_hora:%Y-%m-%d %H:%M}"

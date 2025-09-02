@@ -32,8 +32,8 @@ class DoctorSerializer(serializers.ModelSerializer):
 
 
 class ReservaSerializer(serializers.ModelSerializer):
-    paciente = PacienteSerializer(read_only=True)
-    doctor = DoctorSerializer(read_only=True)
+    paciente = serializers.SerializerMethodField(read_only=True)
+    doctor = serializers.SerializerMethodField(read_only=True)
 
     paciente_id = serializers.PrimaryKeyRelatedField(
         queryset=Paciente.objects.all(), write_only=True, source="paciente"
@@ -55,3 +55,23 @@ class ReservaSerializer(serializers.ModelSerializer):
             "creado_en",
             "actualizado_en",
         ]
+
+    def get_paciente(self, obj):
+        user = getattr(obj.paciente, "user", None)
+        return {
+            "id": obj.paciente.id,
+            "nombre": (
+                getattr(user, "first_name", "") + " " + getattr(user, "last_name", "")
+            ).strip()
+            or getattr(user, "email", "Paciente desconocido"),
+        }
+
+    def get_doctor(self, obj):
+        user = getattr(obj.doctor, "user", None)
+        return {
+            "id": obj.doctor.id,
+            "nombre": (
+                getattr(user, "first_name", "") + " " + getattr(user, "last_name", "")
+            ).strip()
+            or getattr(user, "email", "Doctor desconocido"),
+        }
