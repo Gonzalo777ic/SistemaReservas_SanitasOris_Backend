@@ -1,4 +1,5 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
+from appointments.models import CustomUser  # ajusta el import
 
 
 class EsAdmin(BasePermission):
@@ -16,7 +17,4 @@ class EsDoctor(BasePermission):
 
 class EsPaciente(BasePermission):
     def has_permission(self, request, view):
-        return hasattr(request.user, "paciente_profile")
-
-    def has_object_permission(self, request, view, obj):
-        return obj.paciente.email == request.user.email
+        return request.user.is_authenticated  # ignora role por ahora

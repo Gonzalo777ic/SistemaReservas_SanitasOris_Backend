@@ -13,6 +13,11 @@ class Auth0User:
         self.payload = payload
         self.username = payload.get("sub")  # ID único de Auth0
         self.email = payload.get("email")  # 👈 puede venir en el token
+        # mapear roles
+        self.role = None
+        roles = payload.get("https://sanitasoris.com/claims/roles", [])
+        if roles:
+            self.role = roles[0]  # si tienes múltiples roles, ajusta según necesidad
 
     @property
     def is_authenticated(self):
