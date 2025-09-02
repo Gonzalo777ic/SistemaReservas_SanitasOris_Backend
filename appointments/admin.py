@@ -21,7 +21,10 @@ class CustomUserAdmin(UserAdmin):
 
     fieldsets = (
         (None, {"fields": ("auth0_id", "email", "password")}),
-        ("Personal info", {"fields": ("first_name", "last_name", "role")}),
+        (
+            "Personal info",
+            {"fields": ("first_name", "last_name", "role")},
+        ),
         (
             "Permissions",
             {
@@ -34,8 +37,13 @@ class CustomUserAdmin(UserAdmin):
                 )
             },
         ),
-        ("Important dates", {"fields": ("last_login", "date_joined")}),
+        (
+            "Important dates",
+            {"fields": ("last_login", "date_joined")},
+        ),
     )
+
+    readonly_fields = ("date_joined", "last_login")  # 👈 SOLUCIÓN
 
     add_fieldsets = (
         (
@@ -45,6 +53,7 @@ class CustomUserAdmin(UserAdmin):
                 "fields": (
                     "auth0_id",
                     "email",
+                    "role",
                     "password1",
                     "password2",
                     "is_staff",

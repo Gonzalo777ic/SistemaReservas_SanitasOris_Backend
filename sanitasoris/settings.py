@@ -39,10 +39,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "appointments",
     "rest_framework",
     "django_filters",
     "corsheaders",
+    "appointments.apps.AppointmentsConfig",
 ]
 
 REST_FRAMEWORK = {
