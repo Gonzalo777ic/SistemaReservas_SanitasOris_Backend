@@ -13,5 +13,3 @@ def create_related_profile(sender, instance, created, **kwargs):
     # Si el rol cambió a paciente y no existe un Paciente, lo creamos
     elif instance.role == "paciente":
         Paciente.objects.get_or_create(user=instance)
-
-    # Si el rol cambió a admin, opcional: podrías borrar las otras relaciones

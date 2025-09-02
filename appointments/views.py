@@ -161,26 +161,24 @@ class ReservaViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        auth0_user = self.request.user  # esto es Auth0User
+        auth0_user = self.request.user
+        print("🔹 Auth0User:", auth0_user)
 
-        if not auth0_user:
+        # 🔹 Extraer auth0_id correctamente
+        auth0_id = getattr(auth0_user, "username", None) or getattr(
+            auth0_user, "payload", {}
+        ).get("sub")
+        print("🔹 auth0_id extraído:", auth0_id)
+
+        if not auth0_id:
+            print("⚠️ No se pudo extraer auth0_id")
             return Reserva.objects.none()
 
-        # 🔹 Convertir a CustomUser
         try:
-            auth0_id = getattr(auth0_user, "sub", None)  # intenta como atributo
-            if auth0_id is None and hasattr(auth0_user, "_payload"):
-                auth0_id = auth0_user._payload.get("sub")
-
-            if not auth0_id:
-                return Reserva.objects.none()
-
-            try:
-                user = CustomUser.objects.get(auth0_id=auth0_id)
-            except CustomUser.DoesNotExist:
-                return Reserva.objects.none()
-
+            user = CustomUser.objects.get(auth0_id=auth0_id)
+            print("🔹 CustomUser encontrado:", user)
         except CustomUser.DoesNotExist:
+            print("⚠️ CustomUser no encontrado")
             return Reserva.objects.none()
 
         if getattr(user, "is_staff", False):
@@ -189,4 +187,8 @@ class ReservaViewSet(viewsets.ModelViewSet):
         if hasattr(user, "doctor_profile"):
             return Reserva.objects.filter(doctor__user=user)
 
-        return Reserva.objects.filter(paciente__user=user)
+        try:
+            paciente = user.paciente_profile
+            return Reserva.objects.filter(paciente=paciente).order_by("fecha_hora")
+        except Paciente.DoesNotExist:
+            return Reserva.objects.none()
