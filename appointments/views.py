@@ -192,3 +192,48 @@ class ReservaViewSet(viewsets.ModelViewSet):
             return Reserva.objects.filter(paciente=paciente).order_by("fecha_hora")
         except Paciente.DoesNotExist:
             return Reserva.objects.none()
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def whoami(request):
+    auth0_user = request.user
+    print("🔹 whoami: request.user =", auth0_user)
+
+    # Extraer sub desde Auth0User
+    auth0_id = None
+    if hasattr(auth0_user, "payload"):  # caso Auth0User wrapper
+        auth0_id = auth0_user.payload.get("sub")
+    else:
+        auth0_id = getattr(auth0_user, "sub", None)
+
+    print("🔹 whoami: auth0_id extraído =", auth0_id)
+
+    if not auth0_id:
+        return Response({"detail": "No se pudo extraer auth0_id"}, status=400)
+
+    try:
+        user = CustomUser.objects.get(auth0_id=auth0_id)
+        print("🔹 whoami: CustomUser encontrado =", user, "| staff =", user.is_staff)
+    except CustomUser.DoesNotExist:
+        print("⚠️ whoami: CustomUser no encontrado")
+        return Response({"detail": "Usuario no encontrado"}, status=404)
+
+    # Determinar rol
+    role = "paciente"
+    if getattr(user, "is_staff", False):
+        role = "admin"
+    elif hasattr(user, "doctor_profile"):
+        role = "doctor"
+    elif hasattr(user, "paciente_profile"):
+        role = "paciente"
+
+    print(f"✅ Rol asignado para {user.email}: {role}")
+
+    return Response(
+        {
+            "email": user.email,
+            "role": role,
+            "nombre": f"{user.first_name} {user.last_name}".strip() or user.email,
+        }
+    )

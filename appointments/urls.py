@@ -7,6 +7,7 @@ from .views import (
     ReservaViewSet,
     get_paciente_by_email,
     sync_user,
+    whoami,
 )
 
 router = routers.DefaultRouter()
@@ -22,4 +23,5 @@ urlpatterns = [
         name="get_paciente_by_email",
     ),
     path("sync-user/", sync_user, name="sync_user"),
+    path("whoami/", whoami, name="whoami"),
 ]
