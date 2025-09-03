@@ -9,6 +9,7 @@ from .views import (
     sync_user,
     whoami,
 )
+from .views import admin_stats
 
 router = routers.DefaultRouter()
 router.register(r"pacientes", PacienteViewSet)
@@ -24,4 +25,5 @@ urlpatterns = [
     ),
     path("sync-user/", sync_user, name="sync_user"),
     path("whoami/", whoami, name="whoami"),
+    path("admin/stats/", admin_stats, name="admin_stats"),
 ]

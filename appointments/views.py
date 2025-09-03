@@ -12,6 +12,10 @@ from .models import Paciente, Doctor, Reserva, CustomUser
 from .serializers import PacienteSerializer, DoctorSerializer, ReservaSerializer
 from .permissions import EsAdmin, EsDoctor, EsPaciente
 
+from django.utils.timezone import now
+from django.db.models import Count
+from datetime import timedelta
+
 
 # -----------------------------
 # Pacientes
@@ -237,3 +241,31 @@ def whoami(request):
             "nombre": f"{user.first_name} {user.last_name}".strip() or user.email,
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_stats(request):
+    try:
+        week_offset = int(request.GET.get("week_offset", 0))
+
+        today = now().date()
+        start_of_week = today + timedelta(weeks=week_offset)
+        end_of_week = start_of_week + timedelta(days=6)
+
+        # ✅ Ahora usando los campos correctos
+        citas_pendientes = Reserva.objects.filter(estado="pendiente").count()
+        citas_semana = Reserva.objects.filter(
+            fecha_hora__date__range=[start_of_week, end_of_week], estado="pendiente"
+        ).count()
+        total_pacientes = Paciente.objects.count()
+
+        return Response(
+            {
+                "citas_pendientes": citas_pendientes,
+                "citas_semana": citas_semana,
+                "total_pacientes": total_pacientes,
+            }
+        )
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
