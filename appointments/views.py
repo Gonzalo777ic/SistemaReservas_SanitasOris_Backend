@@ -16,6 +16,9 @@ from django.utils.timezone import now
 from django.db.models import Count
 from datetime import timedelta
 
+from .serializers import ProcedimientoSerializer, HorarioDoctorSerializer
+from .models import Procedimiento, HorarioDoctor
+
 
 # -----------------------------
 # Pacientes
@@ -269,3 +272,22 @@ def admin_stats(request):
         )
     except Exception as e:
         return Response({"error": str(e)}, status=500)
+
+
+class ProcedimientoViewSet(viewsets.ModelViewSet):
+    queryset = Procedimiento.objects.filter(activo=True).order_by("nombre")
+    serializer_class = ProcedimientoSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class HorarioDoctorViewSet(viewsets.ModelViewSet):
+    queryset = HorarioDoctor.objects.filter(activo=True)
+    serializer_class = HorarioDoctorSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        doctor_id = self.request.query_params.get("doctor_id")
+        if doctor_id:
+            qs = qs.filter(doctor_id=doctor_id)
+        return qs

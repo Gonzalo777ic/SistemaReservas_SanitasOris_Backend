@@ -89,7 +89,13 @@ class Reserva(models.Model):
 
     paciente = models.ForeignKey("Paciente", on_delete=models.CASCADE)
     doctor = models.ForeignKey("Doctor", on_delete=models.CASCADE)
+    procedimiento = models.ForeignKey(
+        "Procedimiento", on_delete=models.SET_NULL, null=True, blank=True
+    )
     fecha_hora = models.DateTimeField()
+    duracion_min = models.PositiveIntegerField(
+        default=30
+    )  # se puede sobrescribir según procedimiento
     estado = models.CharField(
         max_length=20, choices=ESTADO_CHOICES, default="pendiente"
     )
@@ -101,18 +107,61 @@ class Reserva(models.Model):
             getattr(self.paciente.user, "first_name", "")
             + " "
             + getattr(self.paciente.user, "last_name", "")
-        )
+        ).strip() or getattr(self.paciente.user, "email", "Paciente desconocido")
+
         doctor_nombre = (
             getattr(self.doctor.user, "first_name", "")
             + " "
             + getattr(self.doctor.user, "last_name", "")
+        ).strip() or getattr(self.doctor.user, "email", "Doctor desconocido")
+
+        procedimiento_nombre = (
+            self.procedimiento.nombre if self.procedimiento else "Sin procedimiento"
         )
 
-        paciente_nombre = paciente_nombre.strip() or getattr(
-            self.paciente.user, "email", "Paciente desconocido"
-        )
-        doctor_nombre = doctor_nombre.strip() or getattr(
-            self.doctor.user, "email", "Doctor desconocido"
-        )
+        return f"{paciente_nombre} con Dr(a). {doctor_nombre} el {self.fecha_hora:%Y-%m-%d %H:%M} ({procedimiento_nombre})"
 
-        return f"{paciente_nombre} con Dr(a). {doctor_nombre} el {self.fecha_hora:%Y-%m-%d %H:%M}"
+
+class Procedimiento(models.Model):
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.TextField(blank=True, null=True)
+    duracion_min = models.PositiveIntegerField(
+        help_text="Duración estándar del procedimiento en minutos"
+    )
+    activo = models.BooleanField(default=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.nombre} ({self.duracion_min} min)"
+
+
+class HorarioDoctor(models.Model):
+    DIAS_SEMANA = [
+        (0, "Lunes"),
+        (1, "Martes"),
+        (2, "Miércoles"),
+        (3, "Jueves"),
+        (4, "Viernes"),
+        (5, "Sábado"),
+        (6, "Domingo"),
+    ]
+
+    doctor = models.ForeignKey(
+        "Doctor", on_delete=models.CASCADE, related_name="horarios"
+    )
+    dia_semana = models.IntegerField(choices=DIAS_SEMANA)
+    hora_inicio = models.TimeField()
+    hora_fin = models.TimeField()
+    activo = models.BooleanField(default=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("doctor", "dia_semana", "hora_inicio", "hora_fin")
+        ordering = ["doctor", "dia_semana", "hora_inicio"]
+
+    def __str__(self):
+        return f"{self.doctor} - {self.get_dia_semana_display()} {self.hora_inicio} a {self.hora_fin}"

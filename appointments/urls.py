@@ -5,9 +5,12 @@ from .views import (
     PacienteViewSet,
     DoctorViewSet,
     ReservaViewSet,
+    ProcedimientoViewSet,
+    HorarioDoctorViewSet,
     get_paciente_by_email,
     sync_user,
     whoami,
+    admin_stats,
 )
 from .views import admin_stats
 
@@ -15,6 +18,8 @@ router = routers.DefaultRouter()
 router.register(r"pacientes", PacienteViewSet)
 router.register(r"doctores", DoctorViewSet)
 router.register(r"reservas", ReservaViewSet)
+router.register(r"procedimientos", ProcedimientoViewSet)
+router.register(r"horarios", HorarioDoctorViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),
