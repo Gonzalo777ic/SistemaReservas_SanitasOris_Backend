@@ -1,6 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Paciente, Doctor, Reserva, CustomUser
+from .models import (
+    Paciente,
+    Doctor,
+    Reserva,
+    CustomUser,
+    Procedimiento,
+    HorarioDoctor,
+)
 
 
 @admin.register(CustomUser)
@@ -120,3 +127,29 @@ class DoctorAdmin(admin.ModelAdmin):
 @admin.register(Reserva)
 class ReservaAdmin(admin.ModelAdmin):
     list_display = ("paciente", "doctor", "fecha_hora", "estado", "creado_en")
+
+
+@admin.register(Procedimiento)
+class ProcedimientoAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "duracion_min", "activo", "creado_en")
+    list_filter = ("activo",)
+    search_fields = ("nombre",)
+
+
+@admin.register(HorarioDoctor)
+class HorarioDoctorAdmin(admin.ModelAdmin):
+    list_display = (
+        "doctor",
+        "get_dia_nombre",  # 👈 usamos un método custom
+        "hora_inicio",
+        "hora_fin",
+        "activo",
+        "creado_en",
+    )
+    list_filter = ("dia_semana", "activo")
+    search_fields = ("doctor__user__first_name", "doctor__user__last_name")
+
+    def get_dia_nombre(self, obj):
+        return obj.get_dia_semana_display()
+
+    get_dia_nombre.short_description = "Día"
