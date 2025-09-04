@@ -11,6 +11,7 @@ from .views import (
     sync_user,
     whoami,
     admin_stats,
+    DisponibilidadView,
 )
 from .views import admin_stats
 
@@ -31,4 +32,7 @@ urlpatterns = [
     path("sync-user/", sync_user, name="sync_user"),
     path("whoami/", whoami, name="whoami"),
     path("admin/stats/", admin_stats, name="admin_stats"),
+    path(
+        "reservas/disponibilidad/", DisponibilidadView.as_view(), name="disponibilidad"
+    ),
 ]

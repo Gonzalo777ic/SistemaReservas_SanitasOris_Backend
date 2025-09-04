@@ -75,6 +75,11 @@ class Doctor(models.Model):
     telefono = models.CharField(max_length=20, blank=True, null=True)
     disponible = models.BooleanField(default=True)
     fecha_registro = models.DateTimeField(auto_now_add=True)
+    procedimientos = models.ManyToManyField(
+        "Procedimiento",
+        blank=True,
+        related_name="doctores",
+    )
 
     def __str__(self):
         return f"Dr(a). {self.user.auth0_id} ({self.especialidad})"

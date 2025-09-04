@@ -106,6 +106,8 @@ class DoctorAdmin(admin.ModelAdmin):
         "especialidad",
         "telefono",
         "disponible",
+        "get_procedimientos",
+        "fecha_registro",
     )
 
     def get_nombre(self, obj):
@@ -122,6 +124,11 @@ class DoctorAdmin(admin.ModelAdmin):
         return obj.user.email if hasattr(obj.user, "email") else "-"
 
     get_email.short_description = "Email"
+
+    def get_procedimientos(self, obj):
+        return ", ".join([p.nombre for p in obj.procedimientos.all()]) or "-"
+
+    get_procedimientos.short_description = "Procedimientos"
 
 
 @admin.register(Reserva)

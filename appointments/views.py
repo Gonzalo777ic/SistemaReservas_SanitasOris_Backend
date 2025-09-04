@@ -19,6 +19,13 @@ from datetime import timedelta
 from .serializers import ProcedimientoSerializer, HorarioDoctorSerializer
 from .models import Procedimiento, HorarioDoctor
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+from django.utils import timezone
+from datetime import datetime, timedelta
+from rest_framework.decorators import action
+
 
 # -----------------------------
 # Pacientes
@@ -200,6 +207,36 @@ class ReservaViewSet(viewsets.ModelViewSet):
         except Paciente.DoesNotExist:
             return Reserva.objects.none()
 
+    @action(detail=False, methods=["get"])
+    def disponibilidad(self, request):
+        doctor_id = request.query_params.get("doctor_id")
+        procedimiento_id = request.query_params.get("procedimiento_id")
+
+        if not doctor_id or not procedimiento_id:
+            return Response({"error": "Faltan parámetros"}, status=400)
+
+        try:
+            doctor = Doctor.objects.get(id=doctor_id)
+            procedimiento = Procedimiento.objects.get(id=procedimiento_id)
+        except (Doctor.DoesNotExist, Procedimiento.DoesNotExist):
+            return Response(
+                {"error": "Doctor o procedimiento no encontrado"}, status=404
+            )
+
+        # Ejemplo simple: tomar horarios activos del doctor
+        slots = []
+        for horario in doctor.horarios.filter(activo=True, dia_semana__gte=0):
+            # Aquí podrías generar slots por hora o por duración de procedimiento
+            hora_actual = datetime.combine(datetime.today(), horario.hora_inicio)
+            hora_fin = datetime.combine(datetime.today(), horario.hora_fin)
+            while (
+                hora_actual + timedelta(minutes=procedimiento.duracion_min) <= hora_fin
+            ):
+                slots.append(hora_actual.isoformat())
+                hora_actual += timedelta(minutes=procedimiento.duracion_min)
+
+        return Response({"slots_disponibles": slots})
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -291,3 +328,53 @@ class HorarioDoctorViewSet(viewsets.ModelViewSet):
         if doctor_id:
             qs = qs.filter(doctor_id=doctor_id)
         return qs
+
+
+class DisponibilidadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        doctor_id = request.query_params.get("doctor_id")
+        procedimiento_id = request.query_params.get("procedimiento_id")
+
+        if not doctor_id or not procedimiento_id:
+            return Response(
+                {"error": "doctor_id y procedimiento_id son requeridos"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            doctor = Doctor.objects.get(id=doctor_id)
+            procedimiento = Procedimiento.objects.get(id=procedimiento_id)
+        except (Doctor.DoesNotExist, Procedimiento.DoesNotExist):
+            return Response(
+                {"error": "Doctor o Procedimiento no encontrado"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        duracion_procedimiento = timedelta(minutes=procedimiento.duracion_min)
+        horarios = HorarioDoctor.objects.filter(doctor=doctor, activo=True)
+        disponibilidad = []
+
+        for horario in horarios:
+            dia_actual = timezone.now().date() + timedelta(
+                days=horario.dia_semana - timezone.now().weekday()
+            )
+            hora_inicio = datetime.combine(dia_actual, horario.hora_inicio)
+            hora_fin = datetime.combine(dia_actual, horario.hora_fin)
+            hora_fin_con_buffer = hora_fin - duracion_procedimiento
+            current_slot_start = hora_inicio
+
+            while current_slot_start + duracion_procedimiento <= hora_fin_con_buffer:
+                citas_existentes = Reserva.objects.filter(
+                    doctor=doctor,
+                    fecha_hora__gte=current_slot_start,
+                    fecha_hora__lt=current_slot_start + duracion_procedimiento,
+                )
+
+                if not citas_existentes.exists():
+                    disponibilidad.append(current_slot_start)
+
+                current_slot_start += timedelta(minutes=15)
+
+        return Response({"slots_disponibles": disponibilidad})

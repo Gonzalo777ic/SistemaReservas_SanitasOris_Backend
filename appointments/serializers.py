@@ -28,6 +28,7 @@ class DoctorSerializer(serializers.ModelSerializer):
             "telefono",
             "disponible",
             "fecha_registro",
+            "procedimientos",
         ]
 
 
