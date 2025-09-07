@@ -31,11 +31,8 @@ from rest_framework.decorators import action
 # Pacientes
 # -----------------------------
 class PacienteViewSet(viewsets.ModelViewSet):
-    queryset = Paciente.objects.all()
     serializer_class = PacienteSerializer
     filter_backends = [filters.SearchFilter]
-    # ⚠️ Recuerda: ya no existen campos nombre/apellido/email directos en Paciente
-    # Son parte de user, así que ajusta los search_fields
     search_fields = ["user__first_name", "user__last_name", "user__email"]
 
     def get_permissions(self):
@@ -51,9 +48,27 @@ class PacienteViewSet(viewsets.ModelViewSet):
             return Paciente.objects.none()
 
         if getattr(user, "is_staff", False):
-            return Paciente.objects.all()
+            # Solo los administradores pueden ver todos los pacientes
+            # Filtramos para asegurar que solo los pacientes con un usuario válido sean devueltos
+            queryset = Paciente.objects.filter(user__isnull=False)
+            print(
+                f"DEBUG: PacienteViewSet get_queryset encontró {queryset.count()} pacientes."
+            )
+            return queryset
 
-        return Paciente.objects.filter(user=user)
+        # Los pacientes solo pueden ver su propio perfil
+        # Primero, obtenemos el CustomUser de Django a partir del Auth0User
+        auth0_id = getattr(user, "username", None) or getattr(user, "payload", {}).get(
+            "sub"
+        )
+        if not auth0_id:
+            return Paciente.objects.none()
+
+        try:
+            custom_user = CustomUser.objects.get(auth0_id=auth0_id)
+            return Paciente.objects.filter(user=custom_user)
+        except CustomUser.DoesNotExist:
+            return Paciente.objects.none()
 
 
 @api_view(["POST"])

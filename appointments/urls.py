@@ -16,7 +16,7 @@ from .views import (
 from .views import admin_stats
 
 router = routers.DefaultRouter()
-router.register(r"pacientes", PacienteViewSet)
+router.register(r"pacientes", PacienteViewSet, basename="paciente")
 router.register(r"doctores", DoctorViewSet)
 router.register(r"reservas", ReservaViewSet)
 router.register(r"procedimientos", ProcedimientoViewSet)
