@@ -1,7 +1,7 @@
 # appointments/views.py
 from django.shortcuts import get_object_or_404
 
-from rest_framework import viewsets, filters, status
+from rest_framework import viewsets, filters, status, mixins
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -16,7 +16,11 @@ from django.utils.timezone import now
 from django.db.models import Count
 from datetime import timedelta
 
-from .serializers import ProcedimientoSerializer, HorarioDoctorSerializer
+from .serializers import (
+    ProcedimientoSerializer,
+    HorarioDoctorSerializer,
+    CustomUserSerializer,
+)
 from .models import Procedimiento, HorarioDoctor
 
 from rest_framework.views import APIView
@@ -25,6 +29,57 @@ from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
 from rest_framework.decorators import action
+
+
+class CustomUserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    queryset = CustomUser.objects.all()
+    serializer_class = CustomUserSerializer
+
+    # ⚠️ En tu endpoint real, deberías añadir permisos para restringir el acceso
+    # permission_classes = [IsAuthenticated, IsAdminUser]
+
+    @action(detail=True, methods=["patch"], url_path="promote_to_doctor")
+    def promote_to_doctor(self, request, pk=None):
+        try:
+            user = self.get_object()
+            if user.role != "paciente":
+                return Response(
+                    {"error": "Solo se puede promover a un paciente a doctor."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.role = "doctor"
+            user.is_staff = True
+            user.save()
+            return Response(
+                {"status": f"Usuario {user.email} promovido a doctor."},
+                status=status.HTTP_200_OK,
+            )
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+    # 🚨 Nueva acción para degradar a un doctor a paciente
+    @action(detail=True, methods=["patch"], url_path="revert_to_paciente")
+    def revert_to_paciente(self, request, pk=None):
+        try:
+            user = self.get_object()
+            if user.role != "doctor":
+                return Response(
+                    {"error": "Solo se puede degradar a un doctor a paciente."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            user.role = "paciente"
+            user.is_staff = False
+            user.save()
+            return Response(
+                {"status": f"Usuario {user.email} degradado a paciente."},
+                status=status.HTTP_200_OK,
+            )
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND
+            )
 
 
 # -----------------------------

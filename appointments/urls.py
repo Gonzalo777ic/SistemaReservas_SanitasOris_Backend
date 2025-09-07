@@ -1,4 +1,3 @@
-# appointments/urls.py
 from django.urls import path, include
 from rest_framework import routers
 from .views import (
@@ -12,6 +11,7 @@ from .views import (
     whoami,
     admin_stats,
     DisponibilidadView,
+    CustomUserViewSet,
 )
 from .views import admin_stats
 
@@ -21,6 +21,7 @@ router.register(r"doctores", DoctorViewSet)
 router.register(r"reservas", ReservaViewSet)
 router.register(r"procedimientos", ProcedimientoViewSet)
 router.register(r"horarios", HorarioDoctorViewSet)
+router.register(r"users", CustomUserViewSet, basename="user")
 
 urlpatterns = [
     path("", include(router.urls)),
