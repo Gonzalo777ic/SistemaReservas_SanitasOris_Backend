@@ -170,3 +170,61 @@ class HorarioDoctor(models.Model):
 
     def __str__(self):
         return f"{self.doctor} - {self.get_dia_semana_display()} {self.hora_inicio} a {self.hora_fin}"
+
+
+# --- Nuevos Modelos para Plantillas de Horarios ---
+
+
+class HorarioSemanalTemplate(models.Model):
+    """
+    Modelo para guardar una plantilla de horario semanal de un doctor.
+    """
+
+    doctor = models.ForeignKey(
+        "Doctor", on_delete=models.CASCADE, related_name="horario_templates"
+    )
+    nombre = models.CharField(
+        max_length=100,
+        help_text="Nombre de la plantilla de horario (ej. 'Horario de Verano')",
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Esto asegura que un doctor no tenga dos plantillas con el mismo nombre
+        unique_together = ("doctor", "nombre")
+
+    def __str__(self):
+        return f"Plantilla '{self.nombre}' de {self.doctor}"
+
+
+class HorarioTemplateItem(models.Model):
+    """
+    Representa una única franja horaria dentro de una plantilla.
+    """
+
+    DIAS_SEMANA = [
+        (0, "Lunes"),
+        (1, "Martes"),
+        (2, "Miércoles"),
+        (3, "Jueves"),
+        (4, "Viernes"),
+        (5, "Sábado"),
+        (6, "Domingo"),
+    ]
+
+    template = models.ForeignKey(
+        "HorarioSemanalTemplate", on_delete=models.CASCADE, related_name="items"
+    )
+    dia_semana = models.IntegerField(choices=DIAS_SEMANA)
+    hora_inicio = models.TimeField()
+    hora_fin = models.TimeField()
+    activo = models.BooleanField(
+        default=True,
+        help_text="Indica si el bloque de horario está activo y debe mostrarse.",
+    )
+
+    class Meta:
+        ordering = ["dia_semana", "hora_inicio"]
+
+    def __str__(self):
+        return f"Día {self.get_dia_semana_display()} de {self.hora_inicio} a {self.hora_fin}"

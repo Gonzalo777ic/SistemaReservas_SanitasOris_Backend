@@ -7,6 +7,8 @@ from .models import (
     CustomUser,
     Procedimiento,
     HorarioDoctor,
+    HorarioSemanalTemplate,  # Importa los nuevos modelos
+    HorarioTemplateItem,
 )
 
 
@@ -50,7 +52,7 @@ class CustomUserAdmin(UserAdmin):
         ),
     )
 
-    readonly_fields = ("date_joined", "last_login")  # 👈 SOLUCIÓN
+    readonly_fields = ("date_joined", "last_login")
 
     add_fieldsets = (
         (
@@ -147,7 +149,7 @@ class ProcedimientoAdmin(admin.ModelAdmin):
 class HorarioDoctorAdmin(admin.ModelAdmin):
     list_display = (
         "doctor",
-        "get_dia_nombre",  # 👈 usamos un método custom
+        "get_dia_nombre",
         "hora_inicio",
         "hora_fin",
         "activo",
@@ -160,3 +162,26 @@ class HorarioDoctorAdmin(admin.ModelAdmin):
         return obj.get_dia_semana_display()
 
     get_dia_nombre.short_description = "Día"
+
+
+# --- Nuevas configuraciones para el panel de administración ---
+
+
+class HorarioTemplateItemInline(admin.TabularInline):
+    """
+    Permite editar los items de la plantilla directamente desde el formulario de la plantilla.
+    """
+
+    model = HorarioTemplateItem
+    extra = 1  # Muestra 1 campo adicional para agregar un nuevo item
+
+
+@admin.register(HorarioSemanalTemplate)
+class HorarioSemanalTemplateAdmin(admin.ModelAdmin):
+    """
+    Configuración para el modelo de Plantillas de Horario.
+    """
+
+    list_display = ("nombre", "doctor", "creado_en")
+    search_fields = ("nombre", "doctor__user__first_name", "doctor__user__last_name")
+    inlines = [HorarioTemplateItemInline]

@@ -1,5 +1,14 @@
 from rest_framework import serializers
-from .models import CustomUser, Paciente, Doctor, Reserva, Procedimiento, HorarioDoctor
+from .models import (
+    CustomUser,
+    Paciente,
+    Doctor,
+    Reserva,
+    Procedimiento,
+    HorarioDoctor,
+    HorarioSemanalTemplate,
+    HorarioTemplateItem,
+)
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -150,3 +159,31 @@ class HorarioDoctorSerializer(serializers.ModelSerializer):
             ).strip()
             or getattr(user, "email", "Doctor desconocido"),
         }
+
+
+# --- Serializers actualizados para Plantillas de Horarios ---
+
+
+class HorarioTemplateItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HorarioTemplateItem
+        fields = ["dia_semana", "hora_inicio", "hora_fin", "activo"]
+
+
+class HorarioSemanalTemplateSerializer(serializers.ModelSerializer):
+    doctor = serializers.PrimaryKeyRelatedField(queryset=Doctor.objects.all())
+    items = HorarioTemplateItemSerializer(many=True, required=False)
+
+    class Meta:
+        model = HorarioSemanalTemplate
+        # Quitamos los campos que no existen en el modelo de plantilla
+        fields = ["id", "nombre", "doctor", "items"]
+
+    def create(self, validated_data):
+        items_data = validated_data.pop("items", [])
+        horario_template = HorarioSemanalTemplate.objects.create(**validated_data)
+
+        for item_data in items_data:
+            HorarioTemplateItem.objects.create(template=horario_template, **item_data)
+
+        return horario_template

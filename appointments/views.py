@@ -9,7 +9,12 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Paciente, Doctor, Reserva, CustomUser
-from .serializers import PacienteSerializer, DoctorSerializer, ReservaSerializer
+from .serializers import (
+    PacienteSerializer,
+    DoctorSerializer,
+    ReservaSerializer,
+    HorarioSemanalTemplateSerializer,
+)
 from .permissions import EsAdmin, EsDoctor, EsPaciente
 
 from django.utils.timezone import now
@@ -21,7 +26,12 @@ from .serializers import (
     HorarioDoctorSerializer,
     CustomUserSerializer,
 )
-from .models import Procedimiento, HorarioDoctor
+from .models import (
+    Procedimiento,
+    HorarioDoctor,
+    HorarioSemanalTemplate,
+    HorarioTemplateItem,
+)
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -29,6 +39,8 @@ from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
 from rest_framework.decorators import action
+
+from django.db import transaction
 
 
 class CustomUserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -448,3 +460,69 @@ class DisponibilidadView(APIView):
                 current_slot_start += timedelta(minutes=15)
 
         return Response({"slots_disponibles": disponibilidad})
+
+
+# --- Nuevo ViewSet para Plantillas de Horarios ---
+
+
+class HorarioSemanalTemplateViewSet(viewsets.ModelViewSet):
+    """
+    Vista para gestionar plantillas de horarios semanales.
+    """
+
+    serializer_class = HorarioSemanalTemplateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Devuelve la lista de plantillas, filtrada por doctor_id si se proporciona.
+        """
+        queryset = HorarioSemanalTemplate.objects.all()
+        doctor_id = self.request.query_params.get("doctor_id", None)
+        if doctor_id is not None:
+            queryset = queryset.filter(doctor_id=doctor_id)
+        return queryset
+
+    @action(detail=True, methods=["post"], url_path="aplicar_a_doctor")
+    def aplicar_a_doctor(self, request, pk=None):
+        """
+        Aplica una plantilla de horario a un doctor, borrando los horarios existentes.
+        """
+        try:
+            template = get_object_or_404(HorarioSemanalTemplate, pk=pk)
+            doctor_id = request.data.get("doctor_id")
+            if not doctor_id:
+                return Response(
+                    {"error": "Debe proporcionar un 'doctor_id'"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            with transaction.atomic():
+                # Borrar todos los horarios de disponibilidad del doctor
+                HorarioDoctor.objects.filter(doctor_id=doctor_id).delete()
+
+                # Crear los nuevos horarios a partir de la plantilla
+                items = template.horariotemplateitem_set.all()
+                nuevos_horarios = []
+                for item in items:
+                    horario_doctor = HorarioDoctor.objects.create(
+                        doctor_id=doctor_id,
+                        dia_semana=item.dia_semana,
+                        hora_inicio=item.hora_inicio,
+                        hora_fin=item.hora_fin,
+                    )
+                    nuevos_horarios.append(horario_doctor)
+
+            # Devolver los nuevos horarios para actualizar el frontend
+            serializer = HorarioDoctorSerializer(nuevos_horarios, many=True)
+            return Response(
+                {
+                    "message": "Plantilla aplicada con éxito",
+                    "horarios_actualizados": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

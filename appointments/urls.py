@@ -12,6 +12,7 @@ from .views import (
     admin_stats,
     DisponibilidadView,
     CustomUserViewSet,
+    HorarioSemanalTemplateViewSet,
 )
 from .views import admin_stats
 
@@ -22,6 +23,9 @@ router.register(r"reservas", ReservaViewSet)
 router.register(r"procedimientos", ProcedimientoViewSet)
 router.register(r"horarios", HorarioDoctorViewSet)
 router.register(r"users", CustomUserViewSet, basename="user")
+router.register(
+    r"horarios-semanales", HorarioSemanalTemplateViewSet, basename="horarios-semanales"
+)
 
 urlpatterns = [
     path("", include(router.urls)),
