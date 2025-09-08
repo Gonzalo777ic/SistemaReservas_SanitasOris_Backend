@@ -526,3 +526,85 @@ class HorarioSemanalTemplateViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, EsDoctor])
+def doctor_stats(request):
+    """
+    Vista para obtener estadísticas de citas y pacientes para un doctor.
+    """
+    try:
+        # Get the CustomUser from the authenticated request
+        auth0_id = request.user.payload.get("sub")
+        custom_user = CustomUser.objects.get(auth0_id=auth0_id)
+
+        # Get the Doctor profile from the CustomUser
+        doctor_profile = Doctor.objects.get(user=custom_user)
+
+        # 1. Correctly filter for PENDING appointments of THIS DOCTOR
+        # Use a single, clear filter
+        citas_pendientes = Reserva.objects.filter(
+            doctor=doctor_profile, estado="pendiente", fecha_hora__gte=timezone.now()
+        ).count()
+
+        # 2. Appointments for THIS WEEK for THIS DOCTOR
+        week_offset = int(request.GET.get("week_offset", 0))
+        today = timezone.now().date()
+        start_of_week = (
+            today + timedelta(weeks=week_offset) - timedelta(days=today.weekday())
+        )
+        end_of_week = start_of_week + timedelta(days=6)
+
+        citas_semana = Reserva.objects.filter(
+            doctor=doctor_profile, fecha_hora__date__range=[start_of_week, end_of_week]
+        ).count()
+
+        # 3. Total unique patients for THIS DOCTOR
+        total_pacientes = (
+            Reserva.objects.filter(doctor=doctor_profile)
+            .values("paciente")
+            .distinct()
+            .count()
+        )
+
+        data = {
+            "citas_pendientes": citas_pendientes,
+            "citas_semana": citas_semana,
+            "total_pacientes": total_pacientes,
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
+    except (CustomUser.DoesNotExist, Doctor.DoesNotExist):
+        return Response(
+            {"error": "No se encontró el perfil de doctor."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, EsDoctor])
+def doctor_reservas(request):
+    """
+    Vista para obtener las reservas del DOCTOR actual para el calendario.
+    """
+    try:
+        auth0_id = request.user.payload.get("sub")
+        custom_user = CustomUser.objects.get(auth0_id=auth0_id)
+        doctor_profile = Doctor.objects.get(user=custom_user)
+
+        # 4. Filter appointments by doctor and show all (pending and confirmed) for the calendar
+        reservas = Reserva.objects.filter(doctor=doctor_profile).order_by("fecha_hora")
+        serializer = ReservaSerializer(reservas, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    except (CustomUser.DoesNotExist, Doctor.DoesNotExist):
+        return Response(
+            {"error": "No se encontró el perfil de doctor."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

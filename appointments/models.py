@@ -13,7 +13,7 @@ class CustomUserManager(BaseUserManager):
             raise ValueError("El usuario debe tener un Auth0 ID")
 
         user = self.model(auth0_id=auth0_id, role=role, **extra_fields)
-        user.set_unusable_password()  # nunca guardamos password local
+        user.set_unusable_password()
         user.save(using=self._db)
         return user
 
@@ -27,8 +27,8 @@ class CustomUserManager(BaseUserManager):
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
-    auth0_id = models.CharField(max_length=100, unique=True)  # vínculo con Auth0
-    email = models.EmailField(unique=True)  # para login/búsquedas
+    auth0_id = models.CharField(max_length=100, unique=True)
+    email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=50, blank=True)
     last_name = models.CharField(max_length=50, blank=True)
     role = models.CharField(
@@ -98,9 +98,7 @@ class Reserva(models.Model):
         "Procedimiento", on_delete=models.SET_NULL, null=True, blank=True
     )
     fecha_hora = models.DateTimeField()
-    duracion_min = models.PositiveIntegerField(
-        default=30
-    )  # se puede sobrescribir según procedimiento
+    duracion_min = models.PositiveIntegerField(default=30)
     estado = models.CharField(
         max_length=20, choices=ESTADO_CHOICES, default="pendiente"
     )
@@ -172,9 +170,6 @@ class HorarioDoctor(models.Model):
         return f"{self.doctor} - {self.get_dia_semana_display()} {self.hora_inicio} a {self.hora_fin}"
 
 
-# --- Nuevos Modelos para Plantillas de Horarios ---
-
-
 class HorarioSemanalTemplate(models.Model):
     """
     Modelo para guardar una plantilla de horario semanal de un doctor.
@@ -190,7 +185,6 @@ class HorarioSemanalTemplate(models.Model):
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # Esto asegura que un doctor no tenga dos plantillas con el mismo nombre
         unique_together = ("doctor", "nombre")
 
     def __str__(self):

@@ -13,6 +13,8 @@ from .views import (
     DisponibilidadView,
     CustomUserViewSet,
     HorarioSemanalTemplateViewSet,
+    doctor_stats,
+    doctor_reservas,
 )
 from .views import admin_stats
 
@@ -40,4 +42,6 @@ urlpatterns = [
     path(
         "reservas/disponibilidad/", DisponibilidadView.as_view(), name="disponibilidad"
     ),
+    path("doctor/stats/", doctor_stats, name="doctor_stats"),
+    path("doctor/reservas/", doctor_reservas, name="doctor_reservas"),
 ]
