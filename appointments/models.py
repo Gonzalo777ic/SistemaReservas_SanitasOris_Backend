@@ -170,17 +170,17 @@ class HorarioDoctor(models.Model):
         return f"{self.doctor} - {self.get_dia_semana_display()} {self.hora_inicio} a {self.hora_fin}"
 
 
-class HorarioSemanalTemplate(models.Model):
-    """
-    Modelo para guardar una plantilla de horario semanal de un doctor.
-    """
+# ... (código anterior)
 
+
+class HorarioSemanalTemplate(models.Model):
     doctor = models.ForeignKey(
         "Doctor", on_delete=models.CASCADE, related_name="horario_templates"
     )
-    nombre = models.CharField(
-        max_length=100,
-        help_text="Nombre de la plantilla de horario (ej. 'Horario de Verano')",
+    nombre = models.CharField(max_length=100)
+    es_activo = models.BooleanField(
+        default=False,
+        help_text="Indica si esta plantilla es la actualmente activa para el doctor.",
     )
     creado_en = models.DateTimeField(auto_now_add=True)
 

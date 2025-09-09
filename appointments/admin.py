@@ -182,6 +182,11 @@ class HorarioSemanalTemplateAdmin(admin.ModelAdmin):
     Configuración para el modelo de Plantillas de Horario.
     """
 
-    list_display = ("nombre", "doctor", "creado_en")
-    search_fields = ("nombre", "doctor__user__first_name", "doctor__user__last_name")
+    list_display = ("nombre", "doctor", "es_activo", "creado_en")
+    search_fields = (
+        "nombre",
+        "doctor__user__first_name",
+        "doctor__user__last_name",
+        "es_activo",
+    )
     inlines = [HorarioTemplateItemInline]

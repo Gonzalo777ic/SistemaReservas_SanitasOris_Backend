@@ -538,6 +538,58 @@ class HorarioSemanalTemplateViewSet(viewsets.ModelViewSet):
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=True, methods=["post"], url_path="activar")
+    def activar_plantilla(self, request, pk=None):
+        """
+        Activa una plantilla semanal para un doctor.
+        """
+        try:
+            # ⭐ CORRECCIÓN CLAVE: Obtener el CustomUser del token
+            auth0_id = request.user.payload.get("sub")
+            try:
+                custom_user = CustomUser.objects.get(auth0_id=auth0_id)
+            except CustomUser.DoesNotExist:
+                return Response(
+                    {"error": "Usuario no encontrado en la base de datos."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # ⭐ CORRECCIÓN: Ahora puedes usar el objeto custom_user para verificar el perfil del doctor
+            if not hasattr(custom_user, "doctor_profile"):
+                return Response(
+                    {"error": "Permisos insuficientes. El usuario no es un doctor."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            template = get_object_or_404(HorarioSemanalTemplate, pk=pk)
+
+            # Verificar que el doctor que intenta activar la plantilla sea su propietario
+            if custom_user.doctor_profile != template.doctor:
+                return Response(
+                    {"error": "No tiene permisos para modificar esta plantilla."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            with transaction.atomic():
+                # Desactivar todas las demás plantillas del mismo doctor
+                HorarioSemanalTemplate.objects.filter(
+                    doctor=template.doctor, es_activo=True
+                ).exclude(pk=template.pk).update(es_activo=False)
+
+                # Activar la plantilla seleccionada
+                template.es_activo = True
+                template.save()
+
+                # Reutilizar la lógica para aplicar la plantilla a los horarios del doctor
+                aplicar_response = self.aplicar_a_doctor(request, pk)
+
+            return aplicar_response
+        except Exception as e:
+            # Manejar errores más específicos si es necesario
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, EsDoctor])
