@@ -400,7 +400,9 @@ class ProcedimientoViewSet(viewsets.ModelViewSet):
 
 
 class HorarioDoctorViewSet(viewsets.ModelViewSet):
-    queryset = HorarioDoctor.objects.filter(activo=True)
+    # Antes: queryset = HorarioDoctor.objects.filter(activo=True)
+    # Ahora: Se remueve el filtro para permitir el acceso a todos los horarios
+    queryset = HorarioDoctor.objects.all()
     serializer_class = HorarioDoctorSerializer
     permission_classes = [IsAuthenticated]
 
@@ -409,6 +411,14 @@ class HorarioDoctorViewSet(viewsets.ModelViewSet):
         doctor_id = self.request.query_params.get("doctor_id")
         if doctor_id:
             qs = qs.filter(doctor_id=doctor_id)
+
+        # Filtro adicional para el admin (si es necesario) o para el doctor
+        # Opcional: El frontend puede manejar el filtro para mostrar solo los activos
+        # Puedes mantener el filtro para que el GET solo devuelva los activos,
+        # pero para PUT, el queryset debe ser all()
+        # if self.request.method == 'GET':
+        #     return qs.filter(activo=True)
+
         return qs
 
 
@@ -502,7 +512,8 @@ class HorarioSemanalTemplateViewSet(viewsets.ModelViewSet):
                 HorarioDoctor.objects.filter(doctor_id=doctor_id).delete()
 
                 # Crear los nuevos horarios a partir de la plantilla
-                items = template.horariotemplateitem_set.all()
+                # CORRECCIÓN: Usar el related_name "items" del modelo HorarioTemplateItem
+                items = template.items.all()
                 nuevos_horarios = []
                 for item in items:
                     horario_doctor = HorarioDoctor.objects.create(
