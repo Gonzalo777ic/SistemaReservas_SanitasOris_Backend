@@ -104,6 +104,7 @@ class Reserva(models.Model):
     )
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
+    notas_doctor = models.TextField(blank=True, null=True)
 
     def __str__(self):
         paciente_nombre = (
