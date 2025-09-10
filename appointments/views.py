@@ -21,7 +21,7 @@ from .permissions import EsAdmin, EsDoctor, EsPaciente
 
 from django.utils.timezone import now
 from django.db.models import Count
-from datetime import timedelta
+from datetime import timedelta, date
 
 from .serializers import (
     ProcedimientoSerializer,
@@ -425,103 +425,109 @@ class HorarioDoctorViewSet(viewsets.ModelViewSet):
 
 
 class DisponibilidadView(APIView):
-    permission_classes = []
-
-    def get(self, request, *args, **kwargs):
-        print("--- INICIO DE PROCESAMIENTO DE DISPONIBILIDAD (BLOQUES) ---")
-
+    def get(self, request):
         doctor_id = request.query_params.get("doctor_id")
         procedimiento_id = request.query_params.get("procedimiento_id")
 
+        start_date_str = request.query_params.get("start_date")
+        end_date_str = request.query_params.get("end_date")
+
         if not doctor_id or not procedimiento_id:
             return Response(
-                {"error": "doctor_id y procedimiento_id son requeridos"},
+                {"error": "Debe seleccionar un doctor y un procedimiento."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             doctor = Doctor.objects.get(id=doctor_id)
-            procedimiento = Procedimiento.objects.get(id=procedimiento_id)
-        except (Doctor.DoesNotExist, Procedimiento.DoesNotExist):
+        except Doctor.DoesNotExist:
             return Response(
-                {"error": "Doctor o Procedimiento no encontrado"},
-                status=status.HTTP_404_NOT_FOUND,
+                {"error": "El doctor no existe."}, status=status.HTTP_404_NOT_FOUND
             )
 
+        # Parsear las fechas desde los parámetros de la URL.
+        try:
+            if start_date_str and end_date_str:
+                start_date = date.fromisoformat(start_date_str)
+                end_date = date.fromisoformat(end_date_str)
+            else:
+                # Si no se proporcionan fechas, usar la semana actual.
+                start_date = date.today()
+                end_date = start_date + timedelta(days=6)
+        except ValueError:
+            return Response(
+                {"error": "Formato de fecha inválido. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bloques_disponibles = []
+        citas_reservadas = []
+
+        # Encontrar la plantilla de horario semanal activa para el doctor.
         try:
             active_template = HorarioSemanalTemplate.objects.get(
                 doctor=doctor, es_activo=True
             )
         except HorarioSemanalTemplate.DoesNotExist:
-            print("No se encontró ninguna plantilla de horario activa.")
             return Response(
-                {"bloques_disponibles": [], "citas_reservadas": []},
-                status=status.HTTP_200_OK,
+                {"error": "No hay un horario semanal activo para este doctor."},
+                status=status.HTTP_404_NOT_FOUND,
             )
-
-        today = timezone.now().date()
-        today_weekday = today.weekday()
-
-        horarios_del_dia = active_template.items.filter(dia_semana=today_weekday)
-
-        bloques_disponibles = []
-        citas_reservadas = []
-
-        for horario_item in horarios_del_dia:
-            hora_inicio = horario_item.hora_inicio
-            hora_fin = horario_item.hora_fin
-
-            # 1. Validar si el bloque de horario es válido
-            if hora_inicio >= hora_fin:
-                print(
-                    f"ADVERTENCIA: Hora de inicio >= Hora de fin. Saltando horario: {horario_item}"
-                )
-                continue
-
-            # 2. Construir el rango de tiempo del bloque
-            start_datetime = timezone.make_aware(datetime.combine(today, hora_inicio))
-            end_datetime = timezone.make_aware(datetime.combine(today, hora_fin))
-
-            # 3. Guardar el bloque en la lista de bloques disponibles
-            bloques_disponibles.append(
+        except HorarioSemanalTemplate.MultipleObjectsReturned:
+            return Response(
                 {
-                    "start": start_datetime.isoformat(),
-                    "end": end_datetime.isoformat(),
-                }
+                    "error": "Hay múltiples horarios activos para este doctor. Contacte al administrador."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-            # 4. Encontrar citas existentes en este bloque
-            reservas = Reserva.objects.filter(
-                doctor=doctor,
-                fecha_hora__gte=start_datetime,
-                fecha_hora__lt=end_datetime,
-            )
+        # Generar una lista de fechas dentro del rango especificado.
+        current_date = start_date
+        while current_date <= end_date:
+            weekday = current_date.weekday()
 
-            for reserva in reservas:
-                citas_reservadas.append(
+            # Filtrar los ítems de la plantilla activa para el día de la semana actual.
+            template_items = active_template.items.filter(
+                dia_semana=weekday, activo=True
+            ).order_by("hora_inicio")
+
+            for item in template_items:
+                start_datetime = datetime.combine(current_date, item.hora_inicio)
+                end_datetime = datetime.combine(current_date, item.hora_fin)
+
+                bloques_disponibles.append(
                     {
-                        "id": reserva.id,
-                        "start": reserva.fecha_hora.isoformat(),
-                        "end": (
-                            reserva.fecha_hora + timedelta(minutes=reserva.duracion_min)
-                        ).isoformat(),
-                        "estado": reserva.estado,
-                        "procedimiento_id": reserva.procedimiento_id,
+                        "start": start_datetime.isoformat(),
+                        "end": end_datetime.isoformat(),
                     }
                 )
 
-        # Opcional: Filtra las citas canceladas si no quieres mostrarlas en el calendario
-        citas_reservadas = [
-            cita for cita in citas_reservadas if cita["estado"] != "cancelada"
-        ]
+            current_date += timedelta(days=1)
 
-        response_data = {
-            "bloques_disponibles": bloques_disponibles,
-            "citas_reservadas": citas_reservadas,
-        }
+        # Obtener todas las reservas existentes para el rango de fechas.
+        reservas_queryset = Reserva.objects.filter(
+            doctor=doctor,
+            fecha_hora__gte=start_date,
+            fecha_hora__lte=end_date + timedelta(days=1),
+        )
 
-        print("--- FIN DE PROCESAMIENTO DE DISPONIBILIDAD (BLOQUES) ---")
-        return Response(response_data)
+        for reserva in reservas_queryset:
+            citas_reservadas.append(
+                {
+                    "start": reserva.fecha_hora.isoformat(),
+                    "end": (
+                        reserva.fecha_hora + timedelta(minutes=reserva.duracion_min)
+                    ).isoformat(),
+                }
+            )
+
+        return Response(
+            {
+                "bloques_disponibles": bloques_disponibles,
+                "citas_reservadas": citas_reservadas,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 # --- Nuevo ViewSet para Plantillas de Horarios ---
