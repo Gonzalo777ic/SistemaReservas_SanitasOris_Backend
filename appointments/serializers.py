@@ -55,6 +55,20 @@ class DoctorSerializer(serializers.ModelSerializer):
         ]
 
 
+# Serializer para actualizar el teléfono del Paciente
+class PacienteUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Paciente
+        fields = ["telefono"]
+
+
+# Serializer para actualizar el teléfono del Doctor
+class DoctorUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Doctor
+        fields = ["telefono", "especialidad"]
+
+
 class ProcedimientoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Procedimiento

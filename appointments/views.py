@@ -14,6 +14,8 @@ from .serializers import (
     DoctorSerializer,
     ReservaSerializer,
     HorarioSemanalTemplateSerializer,
+    PacienteUpdateSerializer,
+    DoctorUpdateSerializer,
 )
 from .permissions import EsAdmin, EsDoctor, EsPaciente
 
@@ -671,3 +673,59 @@ def doctor_reservas(request):
         )
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    auth0_id = request.user.payload.get("sub")
+
+    try:
+        user = CustomUser.objects.get(auth0_id=auth0_id)
+    except CustomUser.DoesNotExist:
+        return Response(
+            {"error": "Usuario no encontrado en la base de datos."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # El problema está aquí. En vez de devolver 403, simplemente
+    # no permitas que el código continúe si es un admin.
+    if user.role == "admin":
+        # Devuelve una respuesta de éxito (200 OK) sin hacer nada.
+        # Esto evita el error en el frontend y comunica que la petición
+        # fue recibida, pero no hay nada que actualizar.
+        return Response(
+            {"message": "El perfil de administrador no es editable."},
+            status=status.HTTP_200_OK,
+        )
+
+    # Ahora el código solo se ejecuta si el usuario NO es un admin
+    if user.role == "paciente":
+        try:
+            profile = Paciente.objects.get(user=user)
+            serializer = PacienteUpdateSerializer(
+                profile, data=request.data, partial=True
+            )
+        except Paciente.DoesNotExist:
+            return Response(
+                {"error": "Perfil de paciente no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    elif user.role == "doctor":
+        try:
+            profile = Doctor.objects.get(user=user)
+            serializer = DoctorUpdateSerializer(
+                profile, data=request.data, partial=True
+            )
+        except Doctor.DoesNotExist:
+            return Response(
+                {"error": "Perfil de doctor no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -15,6 +15,7 @@ from .views import (
     HorarioSemanalTemplateViewSet,
     doctor_stats,
     doctor_reservas,
+    update_profile,
 )
 from .views import admin_stats
 
@@ -44,4 +45,5 @@ urlpatterns = [
     ),
     path("doctor/stats/", doctor_stats, name="doctor_stats"),
     path("doctor/reservas/", doctor_reservas, name="doctor_reservas"),
+    path("profile/update/", update_profile, name="update_profile"),
 ]
