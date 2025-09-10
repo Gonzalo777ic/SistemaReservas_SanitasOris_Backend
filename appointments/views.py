@@ -425,9 +425,11 @@ class HorarioDoctorViewSet(viewsets.ModelViewSet):
 
 
 class DisponibilidadView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = []
 
     def get(self, request, *args, **kwargs):
+        print("--- INICIO DE PROCESAMIENTO DE DISPONIBILIDAD (BLOQUES) ---")
+
         doctor_id = request.query_params.get("doctor_id")
         procedimiento_id = request.query_params.get("procedimiento_id")
 
@@ -446,32 +448,80 @@ class DisponibilidadView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        duracion_procedimiento = timedelta(minutes=procedimiento.duracion_min)
-        horarios = HorarioDoctor.objects.filter(doctor=doctor, activo=True)
-        disponibilidad = []
-
-        for horario in horarios:
-            dia_actual = timezone.now().date() + timedelta(
-                days=horario.dia_semana - timezone.now().weekday()
+        try:
+            active_template = HorarioSemanalTemplate.objects.get(
+                doctor=doctor, es_activo=True
             )
-            hora_inicio = datetime.combine(dia_actual, horario.hora_inicio)
-            hora_fin = datetime.combine(dia_actual, horario.hora_fin)
-            hora_fin_con_buffer = hora_fin - duracion_procedimiento
-            current_slot_start = hora_inicio
+        except HorarioSemanalTemplate.DoesNotExist:
+            print("No se encontró ninguna plantilla de horario activa.")
+            return Response(
+                {"bloques_disponibles": [], "citas_reservadas": []},
+                status=status.HTTP_200_OK,
+            )
 
-            while current_slot_start + duracion_procedimiento <= hora_fin_con_buffer:
-                citas_existentes = Reserva.objects.filter(
-                    doctor=doctor,
-                    fecha_hora__gte=current_slot_start,
-                    fecha_hora__lt=current_slot_start + duracion_procedimiento,
+        today = timezone.now().date()
+        today_weekday = today.weekday()
+
+        horarios_del_dia = active_template.items.filter(dia_semana=today_weekday)
+
+        bloques_disponibles = []
+        citas_reservadas = []
+
+        for horario_item in horarios_del_dia:
+            hora_inicio = horario_item.hora_inicio
+            hora_fin = horario_item.hora_fin
+
+            # 1. Validar si el bloque de horario es válido
+            if hora_inicio >= hora_fin:
+                print(
+                    f"ADVERTENCIA: Hora de inicio >= Hora de fin. Saltando horario: {horario_item}"
+                )
+                continue
+
+            # 2. Construir el rango de tiempo del bloque
+            start_datetime = timezone.make_aware(datetime.combine(today, hora_inicio))
+            end_datetime = timezone.make_aware(datetime.combine(today, hora_fin))
+
+            # 3. Guardar el bloque en la lista de bloques disponibles
+            bloques_disponibles.append(
+                {
+                    "start": start_datetime.isoformat(),
+                    "end": end_datetime.isoformat(),
+                }
+            )
+
+            # 4. Encontrar citas existentes en este bloque
+            reservas = Reserva.objects.filter(
+                doctor=doctor,
+                fecha_hora__gte=start_datetime,
+                fecha_hora__lt=end_datetime,
+            )
+
+            for reserva in reservas:
+                citas_reservadas.append(
+                    {
+                        "id": reserva.id,
+                        "start": reserva.fecha_hora.isoformat(),
+                        "end": (
+                            reserva.fecha_hora + timedelta(minutes=reserva.duracion_min)
+                        ).isoformat(),
+                        "estado": reserva.estado,
+                        "procedimiento_id": reserva.procedimiento_id,
+                    }
                 )
 
-                if not citas_existentes.exists():
-                    disponibilidad.append(current_slot_start)
+        # Opcional: Filtra las citas canceladas si no quieres mostrarlas en el calendario
+        citas_reservadas = [
+            cita for cita in citas_reservadas if cita["estado"] != "cancelada"
+        ]
 
-                current_slot_start += timedelta(minutes=15)
+        response_data = {
+            "bloques_disponibles": bloques_disponibles,
+            "citas_reservadas": citas_reservadas,
+        }
 
-        return Response({"slots_disponibles": disponibilidad})
+        print("--- FIN DE PROCESAMIENTO DE DISPONIBILIDAD (BLOQUES) ---")
+        return Response(response_data)
 
 
 # --- Nuevo ViewSet para Plantillas de Horarios ---
@@ -688,18 +738,24 @@ def update_profile(request):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    # El problema está aquí. En vez de devolver 403, simplemente
-    # no permitas que el código continúe si es un admin.
-    if user.role == "admin":
-        # Devuelve una respuesta de éxito (200 OK) sin hacer nada.
-        # Esto evita el error en el frontend y comunica que la petición
-        # fue recibida, pero no hay nada que actualizar.
+    # 🛑 1. CRITICAL CORRECTION: PREVENT ROLE CHANGE
+    # Explicitly check if 'role' is in the request data and return an error if it is.
+    if "role" in request.data:
         return Response(
-            {"message": "El perfil de administrador no es editable."},
-            status=status.HTTP_200_OK,
+            {"error": "No se puede cambiar el rol del usuario."},
+            status=status.HTTP_403_FORBIDDEN,
         )
 
-    # Ahora el código solo se ejecuta si el usuario NO es un admin
+    # 🛑 2. CORRECTED LOGIC: Admins can't update their own profiles this way.
+    if user.role == "admin":
+        return Response(
+            {
+                "message": "El perfil de administrador no es editable a través de esta API."
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # The rest of the logic remains the same
     if user.role == "paciente":
         try:
             profile = Paciente.objects.get(user=user)

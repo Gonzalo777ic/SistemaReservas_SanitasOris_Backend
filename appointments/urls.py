@@ -31,6 +31,9 @@ router.register(
 )
 
 urlpatterns = [
+    path(
+        "reservas/disponibilidad/", DisponibilidadView.as_view(), name="disponibilidad"
+    ),
     path("", include(router.urls)),
     path(
         "pacientes/by_email/<str:email>/",
@@ -40,9 +43,6 @@ urlpatterns = [
     path("sync-user/", sync_user, name="sync_user"),
     path("whoami/", whoami, name="whoami"),
     path("admin/stats/", admin_stats, name="admin_stats"),
-    path(
-        "reservas/disponibilidad/", DisponibilidadView.as_view(), name="disponibilidad"
-    ),
     path("doctor/stats/", doctor_stats, name="doctor_stats"),
     path("doctor/reservas/", doctor_reservas, name="doctor_reservas"),
     path("profile/update/", update_profile, name="update_profile"),
