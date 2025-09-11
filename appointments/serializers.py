@@ -11,17 +11,7 @@ from .models import (
 )
 
 
-from rest_framework import serializers
-from .models import (
-    CustomUser,
-    Paciente,
-    Doctor,
-    Reserva,
-    Procedimiento,
-    HorarioDoctor,
-    HorarioSemanalTemplate,
-    HorarioTemplateItem,
-)
+# Removed the duplicate import and models import
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -38,9 +28,23 @@ class PacienteSerializer(serializers.ModelSerializer):
         fields = ["id", "user", "telefono", "fecha_registro"]
 
 
+# Nueva clase para serializar Procedimientos de forma anidada
+class ProcedimientoNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Procedimiento
+        fields = [
+            "id",
+            "nombre",
+            "duracion_min",
+        ]  # Campos que necesitas mostrar en el perfil del doctor
+
+
 class DoctorSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer(read_only=True)  # <-- Use nested serializer
-    procedimientos = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+
+    # CAMBIO CLAVE: Usa el serializer anidado en lugar de PrimaryKeyRelatedField
+    procedimientos = ProcedimientoNestedSerializer(many=True, read_only=True)
+
     nombre = serializers.SerializerMethodField()
 
     class Meta:
@@ -71,10 +75,20 @@ class PacienteUpdateSerializer(serializers.ModelSerializer):
 class DoctorUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Doctor
-        fields = ["telefono", "especialidad"]
+        fields = ["telefono", "especialidad", "procedimientos", "disponible"]
 
 
 class ProcedimientoSerializer(serializers.ModelSerializer):
+    # Campo para manejar la relación many-to-many con doctores
+    doctores = serializers.PrimaryKeyRelatedField(
+        queryset=Doctor.objects.all(),
+        many=True,
+        required=False,  # No es obligatorio tener un doctor asignado
+    )
+
+    # Campo para mostrar los nombres de los doctores en la respuesta GET
+    doctores_nombres = serializers.SerializerMethodField()
+
     class Meta:
         model = Procedimiento
         fields = [
@@ -84,9 +98,15 @@ class ProcedimientoSerializer(serializers.ModelSerializer):
             "duracion_min",
             "activo",
             "imagen",
+            "doctores",  # <- Este campo recibirá la lista de IDs de doctores
+            "doctores_nombres",  # <- Este campo es solo para lectura
             "creado_en",
             "actualizado_en",
         ]
+
+    def get_doctores_nombres(self, obj):
+        # Mapea los doctores relacionados para obtener sus nombres
+        return [f"{d.user.first_name} {d.user.last_name}" for d in obj.doctores.all()]
 
 
 class ReservaSerializer(serializers.ModelSerializer):

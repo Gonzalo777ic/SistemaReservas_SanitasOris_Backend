@@ -1,7 +1,7 @@
 # appointments/views.py
 from django.shortcuts import get_object_or_404
 
-from rest_framework import viewsets, filters, status, mixins
+from rest_framework import viewsets, filters, status, mixins, permissions, parsers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -507,9 +507,29 @@ def admin_stats(request):
 
 
 class ProcedimientoViewSet(viewsets.ModelViewSet):
-    queryset = Procedimiento.objects.filter(activo=True).order_by("nombre")
+    queryset = Procedimiento.objects.all()
     serializer_class = ProcedimientoSerializer
-    permission_classes = [IsAuthenticated]
+
+    # CAMBIO CLAVE: Usa el método get_permissions para un control más granular
+    def get_permissions(self):
+        # Permite a cualquier usuario autenticado ver la lista de procedimientos (métodos GET, OPTIONS)
+        if self.action in ["list", "retrieve"]:
+            return [permissions.IsAuthenticated()]
+
+        # Requiere ser un usuario administrador para crear, actualizar o eliminar procedimientos
+        return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
+
+    def perform_create(self, serializer):
+        doctores_data = self.request.data.getlist("doctores")
+        procedimiento_instance = serializer.save()
+        procedimiento_instance.doctores.set([int(d_id) for d_id in doctores_data])
+
+    def perform_update(self, serializer):
+        doctores_data = self.request.data.getlist("doctores")
+        procedimiento_instance = serializer.save()
+        procedimiento_instance.doctores.set([int(d_id) for d_id in doctores_data])
 
 
 class HorarioDoctorViewSet(viewsets.ModelViewSet):
