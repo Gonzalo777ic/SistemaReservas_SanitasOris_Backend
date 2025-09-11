@@ -83,6 +83,7 @@ class ProcedimientoSerializer(serializers.ModelSerializer):
             "descripcion",
             "duracion_min",
             "activo",
+            "imagen",
             "creado_en",
             "actualizado_en",
         ]

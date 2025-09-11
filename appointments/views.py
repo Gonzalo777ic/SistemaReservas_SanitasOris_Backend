@@ -212,9 +212,17 @@ def get_paciente_by_email(request, email):
 # -----------------------------
 # Doctores
 # -----------------------------
+
+
 class DoctorViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para la gestión de perfiles de doctores.
+    """
+
     queryset = Doctor.objects.all()
     serializer_class = DoctorSerializer
+    permission_classes = [IsAuthenticated]
+
     filter_backends = [filters.SearchFilter]
     search_fields = [
         "user__first_name",
@@ -224,13 +232,116 @@ class DoctorViewSet(viewsets.ModelViewSet):
     ]
 
     def get_permissions(self):
-        """
-        - GET público (los pacientes necesitan ver doctores).
-        - POST/PUT/DELETE solo admin.
-        """
+        # This method is now primarily for actions *without* explicit @action permission_classes
         if self.action in ["list", "retrieve"]:
             return [AllowAny()]
-        return [EsAdmin()]
+        return [
+            IsAuthenticated(),
+            EsAdmin(),
+        ]  # Default for create, update, delete if not overridden
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="by_email/(?P<email>.+)",
+        permission_classes=[
+            IsAuthenticated,
+            EsDoctor,
+        ],  # <--- Make sure this is present and correct
+    )
+    def by_email(self, request, email=None):
+        """
+        Obtiene el perfil de un doctor por su dirección de correo electrónico.
+        """
+        try:
+            # Obtiene el CustomUser real del usuario que hace la petición
+            auth0_id_requesting_user = request.user.payload.get("sub")
+            requesting_custom_user = CustomUser.objects.get(
+                auth0_id=auth0_id_requesting_user
+            )
+
+            # Obtiene el CustomUser del email en la URL
+            user_in_url = CustomUser.objects.get(email=email)
+            doctor = Doctor.objects.get(user=user_in_url)
+
+            # 💡 Capa de seguridad: un doctor solo puede ver su propio perfil
+            if (
+                not requesting_custom_user.is_staff
+                and requesting_custom_user.email != email
+            ):
+                return Response(
+                    {"error": "No tiene permiso para ver el perfil de otro doctor."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            serializer = self.get_serializer(doctor)
+            return Response(serializer.data)
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND
+            )
+        except Doctor.DoesNotExist:
+            return Response(
+                {"error": "Perfil de doctor no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    # --- Vista para actualizar procedimientos del doctor ---
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="procedimientos-personalizados",
+        permission_classes=[IsAuthenticated, EsDoctor],
+    )
+    def procedimientos_personalizados(self, request, pk=None):
+        """
+        Actualiza la lista de procedimientos que un doctor puede realizar.
+        """
+        try:
+            doctor = get_object_or_404(Doctor, pk=pk)
+            procedimientos_ids = request.data.get("procedimientos", [])
+
+            # 💡 Capa de seguridad: un doctor solo puede modificar su propio perfil
+            auth0_id_requesting_user = request.user.payload.get("sub")
+            requesting_custom_user = CustomUser.objects.get(
+                auth0_id=auth0_id_requesting_user
+            )
+
+            if (
+                not requesting_custom_user.is_staff
+                and requesting_custom_user.doctor_profile.id != int(pk)
+            ):
+                return Response(
+                    {
+                        "error": "No tiene permiso para modificar los procedimientos de otro doctor."
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            if not isinstance(procedimientos_ids, list):
+                return Response(
+                    {"error": "Procedimientos must be a list of IDs."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            with transaction.atomic():
+                doctor.procedimientos.set(procedimientos_ids)
+                doctor.save()
+
+            return Response(
+                {"message": "Procedimientos del doctor actualizados correctamente."},
+                status=status.HTTP_200_OK,
+            )
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # -----------------------------
@@ -402,8 +513,6 @@ class ProcedimientoViewSet(viewsets.ModelViewSet):
 
 
 class HorarioDoctorViewSet(viewsets.ModelViewSet):
-    # Antes: queryset = HorarioDoctor.objects.filter(activo=True)
-    # Ahora: Se remueve el filtro para permitir el acceso a todos los horarios
     queryset = HorarioDoctor.objects.all()
     serializer_class = HorarioDoctorSerializer
     permission_classes = [IsAuthenticated]

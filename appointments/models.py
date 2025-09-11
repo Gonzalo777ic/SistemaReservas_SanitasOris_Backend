@@ -133,6 +133,7 @@ class Procedimiento(models.Model):
         help_text="Duración estándar del procedimiento en minutos"
     )
     activo = models.BooleanField(default=True)
+    imagen = models.ImageField(upload_to="procedimientos/", blank=True, null=True)
 
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
