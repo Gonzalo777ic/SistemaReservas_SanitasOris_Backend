@@ -41,18 +41,23 @@ class PacienteSerializer(serializers.ModelSerializer):
 class DoctorSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer(read_only=True)  # <-- Use nested serializer
     procedimientos = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    nombre = serializers.SerializerMethodField()
 
     class Meta:
         model = Doctor
         fields = [
             "id",
             "user",
+            "nombre",
             "especialidad",
             "telefono",
             "disponible",
             "fecha_registro",
             "procedimientos",
         ]
+
+    def get_nombre(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip()
 
 
 # Serializer para actualizar el teléfono del Paciente
