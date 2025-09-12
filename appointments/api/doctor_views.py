@@ -232,14 +232,29 @@ class ProcedimientoViewSet(viewsets.ModelViewSet):
     queryset = Procedimiento.objects.all()
     serializer_class = ProcedimientoSerializer
 
-    # CAMBIO CLAVE: Usa el método get_permissions para un control más granular
     def get_permissions(self):
-        # Permite a cualquier usuario autenticado ver la lista de procedimientos (métodos GET, OPTIONS)
+        # Allow any authenticated user to view the list of procedures
         if self.action in ["list", "retrieve"]:
             return [permissions.IsAuthenticated()]
 
-        # Requiere ser un usuario administrador para crear, actualizar o eliminar procedimientos
-        return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+        # For create, update, or delete actions, check if the user is a staff member
+        # First, check if the user is authenticated.
+        if not self.request.user.is_authenticated:
+            return [permissions.IsAuthenticated()]
+
+        # Get the CustomUser from the authenticated request to check the 'is_staff' attribute
+        try:
+            auth0_id = self.request.user.payload.get("sub")
+            user = CustomUser.objects.get(auth0_id=auth0_id)
+            if user.is_staff:
+                return [
+                    permissions.IsAuthenticated()
+                ]  # Return success if they are a staff member
+        except (CustomUser.DoesNotExist, AttributeError):
+            pass  # Continue to the final return statement to deny access
+
+        # Deny access if the user is not a staff member
+        return [permissions.IsAdminUser()]
 
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
 
